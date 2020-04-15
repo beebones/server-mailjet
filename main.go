@@ -1,25 +1,22 @@
 package main
 
 import (
-	"github.com/gin-gonic/gin"
-	"log"
 	"bufio"
-	"os"
 	"encoding/base64"
 	"io/ioutil"
+	"log"
 	"mime/multipart"
-  	mailjet "github.com/mailjet/mailjet-apiv3-go"
+	"os"
+
+	cors "github.com/rs/cors/wrapper/gin"
+
+	"github.com/gin-gonic/gin"
+	mailjet "github.com/mailjet/mailjet-apiv3-go"
 )
-
-
-// EmailRequest é o objeto recebido na requisição
-type EmailRequest struct {
-	From string `json:"from"`
-	To string `json:"to"`
-}
 
 func main() {
 	r := gin.Default()
+	r.Use(cors.Default())
 	r.GET("/health", getHealth)
 	r.POST("/send-mail", sendEmail)
 	r.Run()
@@ -35,14 +32,18 @@ func sendEmail(c *gin.Context) {
 	fh, _ := c.FormFile("file")
 	from := c.PostForm("from")
 	to := c.PostForm("to")
-	
+
+	if fh == nil {
+		log.Fatal("FileHeader está vazio")
+	}
+
 	encoded := convertToBase64(fh)
-	
+
 	_, err := callMailJetAPI(from, to, encoded)
 	if err != nil {
 		log.Fatal(err)
 	}
-	
+
 	c.JSON(200, gin.H{
 		"message": "email enviado",
 	})
@@ -66,29 +67,29 @@ func callMailJetAPI(from string, to string, pdf string) (*mailjet.ResultsV31, er
 
 	mj := mailjet.NewMailjetClient(publicKey, secretKey)
 
-	messagesInfo := []mailjet.InfoMessagesV31 {
+	messagesInfo := []mailjet.InfoMessagesV31{
 		mailjet.InfoMessagesV31{
-		From: &mailjet.RecipientV31{
-			Email: from,
-		},
-		To: &mailjet.RecipientsV31{
-			mailjet.RecipientV31 {
-			Email: to,
+			From: &mailjet.RecipientV31{
+				Email: from,
 			},
-		},
-		Subject: "Certificado de Conclusão de Curso",
-		HTMLPart: "<h3>Parabéns! Segue em anexo o seu certificado de conclusão de curso</h3>",
-		Attachments: &mailjet.AttachmentsV31{
-			mailjet.AttachmentV31{
-				ContentType: "application/pdf",
-				Base64Content: pdf,
-				Filename: "certificado.pdf",
+			To: &mailjet.RecipientsV31{
+				mailjet.RecipientV31{
+					Email: to,
+				},
 			},
-		},
-		CustomID: "AppGettingStartedTest",
+			Subject:  "Certificado de Conclusão de Curso",
+			HTMLPart: "<h3>Parabéns! Segue em anexo o seu certificado de conclusão de curso</h3>",
+			Attachments: &mailjet.AttachmentsV31{
+				mailjet.AttachmentV31{
+					ContentType:   "application/pdf",
+					Base64Content: pdf,
+					Filename:      "certificado.pdf",
+				},
+			},
+			CustomID: "AppGettingStartedTest",
 		},
 	}
-	messages := mailjet.MessagesV31{Info: messagesInfo }
+	messages := mailjet.MessagesV31{Info: messagesInfo}
 	return mj.SendMailV31(&messages)
 
 }
